@@ -1073,25 +1073,23 @@ updateConversationReceiptMode = do
   let convName = "Test Conv"
   WS.bracketR c alice $ \wsAlice -> do
     (rsp, _federatedRequests) <-
-      withTempMockFederator (const ()) $
+      withTempMockFederator (const ()) $ do
         postConvQualified alice defNewProteusConv {newConvName = checked convName, newConvQualifiedUsers = [qChad, qDee]}
           <!! const 201 === statusCode
+
     cid <- assertConvQualified rsp RegularConv alice qAlice [qChad, qDee] (Just convName) Nothing
     let cnv = Qualified cid (qDomain qAlice)
 
-    let newReceiptMode = ReceiptMode 3
-    let action = (SomeConversationAction (sing @'ConversationReceiptModeUpdateTag) (ConversationReceiptModeUpdate newReceiptMode))
+    let newReceiptMode = ReceiptMode 41
+    let action = SomeConversationAction (sing @'ConversationReceiptModeUpdateTag) (ConversationReceiptModeUpdate newReceiptMode)
 
     (_rsp, federatedRequests) <-
       withTempMockFederator (const ()) $ do
-        -- 1. promote chad to admin
+        -- promote chad to admin
         putOtherMemberQualified alice qChad (OtherMemberUpdate (Just roleNameWireAdmin)) cnv
           !!! const 200 === statusCode
 
-        -- 2. chad changes receipt mode (update-converation)
-        --    -> dDomain gets on-conversation-udpate
-        --       but not cDomain
-
+        -- chad updates the conversation
         let cnvUpdateRequest =
               ConversationUpdateRequest
                 { curUser = qUnqualified qChad,
@@ -1112,24 +1110,31 @@ updateConversationReceiptMode = do
 
         liftIO $ do
           cuOrigUserId cnvUpdate' @?= qChad
-          cuConvId cnvUpdate' @?= qUnqualified cnv
           cuAlreadyPresentUsers cnvUpdate' @?= [qUnqualified qChad]
           cuAction cnvUpdate' @?= action
 
-        pure ()
+    -- conversation has been modified by action
+    updatedConv :: Conversation <- fmap responseJsonUnsafe $ getConvQualified alice cnv <!! const 200 === statusCode
+    liftIO $
+      (cnvmReceiptMode . cnvMetadata) updatedConv @?= Just newReceiptMode
 
+    -- dDomain gets notfied of chads promotion and the result of the action
     liftIO $ do
-      dDomainRPC <- assertOne $ filter (\r -> frTargetDomain r == dDomain) federatedRequests
-      frOriginDomain dDomainRPC @?= cDomain
-      frComponent dDomainRPC @?= Galley
-      frRPC dDomainRPC @?= "on-conversation-updated"
-      let cnvUpdate' :: ConversationUpdate = fromRight (error "meh") $ A.eitherDecode (frBody dDomainRPC)
-      cuOrigUserId cnvUpdate' @?= qChad
-      cuConvId cnvUpdate' @?= qUnqualified cnv
-      cuAlreadyPresentUsers cnvUpdate' @?= [qUnqualified qDee]
-      cuAction cnvUpdate' @?= action
+      dUpdates <- mapM parseConvUpdate $ filter (\r -> frTargetDomain r == dDomain) federatedRequests
 
-      assertNone $ filter (\r -> frTargetDomain r == cDomain) federatedRequests
+      (_fr1, _cu1, _up1) <- assertOne $ mapMaybe (\(fr, up) -> getConvAction (sing @'ConversationMemberUpdateTag) (cuAction up) <&> (fr,up,)) dUpdates
+
+      (_fr2, convUpdate, receiptModeUpdate) <- assertOne $ mapMaybe (\(fr, up) -> getConvAction (sing @'ConversationReceiptModeUpdateTag) (cuAction up) <&> (fr,up,)) dUpdates
+
+      cruReceiptMode receiptModeUpdate @?= newReceiptMode
+      cuOrigUserId convUpdate @?= qChad
+      cuConvId convUpdate @?= qUnqualified cnv
+      cuAlreadyPresentUsers convUpdate @?= [qUnqualified qDee]
+
+    -- cDomain gets no notifications besides chads promotion
+    liftIO $ do
+      [(_fr, cUpdate)] <- mapM parseConvUpdate $ filter (\r -> frTargetDomain r == cDomain) federatedRequests
+      assertBool "Action is not a ConversationMemberUpdate" (isJust (getConvAction (sing @'ConversationMemberUpdateTag) (cuAction cUpdate)))
 
     WS.assertMatch_ (5 # Second) wsAlice $ \n -> do
       wsAssertConvReceiptModeUpdate cnv qChad newReceiptMode n
@@ -1145,3 +1150,32 @@ updateConversationReceiptMode = do
       case evtData e of
         EdConversation c' -> assertConvEquals cnv c'
         _ -> assertFailure "Unexpected event data"
+
+    parseConvUpdate :: FederatedRequest -> IO (FederatedRequest, ConversationUpdate)
+    parseConvUpdate rpc = do
+      frComponent rpc @?= Galley
+      frRPC rpc @?= "on-conversation-updated"
+      let convUpdate :: ConversationUpdate = fromRight (error $ "Could not parse ConversationUpdate from " <> show (frBody rpc)) $ A.eitherDecode (frBody rpc)
+      pure (rpc, convUpdate)
+
+getConvAction :: Sing tag -> SomeConversationAction -> Maybe (ConversationAction tag)
+getConvAction tquery (SomeConversationAction tag action) =
+  case (tag, tquery) of
+    (SConversationJoinTag, SConversationJoinTag) -> Just action
+    (SConversationJoinTag, _) -> Nothing
+    (SConversationLeaveTag, SConversationLeaveTag) -> Just action
+    (SConversationLeaveTag, _) -> Nothing
+    (SConversationMemberUpdateTag, SConversationMemberUpdateTag) -> Just action
+    (SConversationMemberUpdateTag, _) -> Nothing
+    (SConversationDeleteTag, SConversationDeleteTag) -> Just action
+    (SConversationDeleteTag, _) -> Nothing
+    (SConversationRenameTag, SConversationRenameTag) -> Just action
+    (SConversationRenameTag, _) -> Nothing
+    (SConversationMessageTimerUpdateTag, SConversationMessageTimerUpdateTag) -> Just action
+    (SConversationMessageTimerUpdateTag, _) -> Nothing
+    (SConversationReceiptModeUpdateTag, SConversationReceiptModeUpdateTag) -> Just action
+    (SConversationReceiptModeUpdateTag, _) -> Nothing
+    (SConversationAccessDataTag, SConversationAccessDataTag) -> Just action
+    (SConversationAccessDataTag, _) -> Nothing
+    (SConversationRemoveMembersTag, SConversationRemoveMembersTag) -> Just action
+    (SConversationRemoveMembersTag, _) -> Nothing
