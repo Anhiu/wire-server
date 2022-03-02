@@ -818,3 +818,13 @@ ensureMemberLimit old new = do
   let maxSize = fromIntegral (o ^. optSettings . setMaxConvSize)
   when (length old + length new > maxSize) $
     throwS @'TooManyMembers
+
+ensureConversationUpdate ::
+  ConversationUpdateResponse ->
+  Sem r ConversationUpdate
+ensureConversationUpdate _response = error "TODO"
+
+-- case conversationUpdateResponse response of
+--   Left InsufficientPrivileges -> throw InvalidPermissions
+--   Left TODO -> error "TODO"
+--   Right convUpdate -> pure convUpdate

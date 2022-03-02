@@ -35,6 +35,7 @@ module Galley.API.Update
     updateConversationAccessUnqualified,
     updateConversationAccess,
     deleteLocalConversation,
+    updateRemoteConversationReceiptMode,
 
     -- * Managing Members
     addMembersUnqualified,
@@ -78,6 +79,7 @@ import Data.Singletons
 import Data.Time
 import Galley.API.Action
 import Galley.API.Error
+import Galley.API.Federation (onConversationUpdated)
 import Galley.API.Mapping
 import Galley.API.Message
 import qualified Galley.API.Query as Query
@@ -111,6 +113,7 @@ import Polysemy.Error
 import Polysemy.Input
 import Polysemy.TinyLog
 import Wire.API.Conversation hiding (Member)
+import Wire.API.Conversation.Action
 import Wire.API.Conversation.Role
 import Wire.API.Error
 import Wire.API.Error.Galley
@@ -318,12 +321,61 @@ updateConversationReceiptMode ::
   ConversationReceiptModeUpdate ->
   Sem r (UpdateResult Event)
 updateConversationReceiptMode lusr zcon qcnv update =
-  getUpdateResult $
-    foldQualified
-      lusr
-      (\lcnv -> updateLocalConversationWithLocalUser @'ConversationReceiptModeUpdateTag lcnv lusr (Just zcon) update)
-      (\_ -> throw FederationNotImplemented)
-      qcnv
+  foldQualified
+    lusr
+    (\lcnv -> getUpdateResult $ updateLocalConversationWithLocalUser @'ConversationReceiptModeUpdateTag lcnv lusr (Just zcon) update)
+    (\_ -> throw FederationNotImplemented)
+    qcnv
+
+updateRemoteConversationReceiptMode ::
+  Members
+    '[ BrigAccess,
+       Error FederationError,
+       ExternalAccess,
+       FederatorAccess,
+       GundeckAccess,
+       Input (Local ()),
+       MemberStore,
+       TinyLog
+     ]
+    r =>
+  Remote ConvId ->
+  Local UserId ->
+  ConnId ->
+  ConversationReceiptModeUpdate ->
+  Sem r (UpdateResult Event)
+updateRemoteConversationReceiptMode rcnv lusr conn update = do
+  updateRemoteConversation rcnv lusr conn (SomeConversationAction (sing @'ConversationReceiptModeUpdateTag) update)
+
+updateRemoteConversation ::
+  Members
+    '[ BrigAccess,
+       Error FederationError,
+       ExternalAccess,
+       FederatorAccess,
+       GundeckAccess,
+       Input (Local ()),
+       MemberStore,
+       TinyLog
+     ]
+    r =>
+  Remote ConvId ->
+  Local UserId ->
+  ConnId ->
+  SomeConversationAction ->
+  Sem r (UpdateResult Event)
+updateRemoteConversation rcnv lusr conn action = do
+  let updateRequest =
+        ConversationUpdateRequest
+          { curUser = tUnqualified lusr,
+            curConvId = tUnqualified rcnv,
+            curAction = action
+          }
+  response <- E.runFederated rcnv (fedClient @'Galley @"update-conversation" updateRequest)
+  convUpdate <- ensureConversationUpdate response
+  onConversationUpdated (tDomain rcnv) convUpdate
+  event <- notifyRemoteConversationAction (qualifyAs rcnv convUpdate) conn
+  pure (Updated event)
 
 updateConversationReceiptModeUnqualified ::
   Members
