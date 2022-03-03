@@ -73,11 +73,13 @@ library:
   - resourcet >=1.1
   - retry >=0.5
   - safe-exceptions >=0.1
+  - semigroups
   - servant
   - servant-client-core
   - servant-server
   - servant-swagger
   - servant-swagger-ui
+  - singletons
   - sop-core
   - split >=0.2
   - ssl-util >=0.1
