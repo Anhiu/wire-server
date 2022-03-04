@@ -96,7 +96,7 @@ servantSitemap = conversations :<|> teamConversations :<|> messaging :<|> bot :<
         :<|> Named @"get-team" getTeamH
         :<|> Named @"delete-team" deleteTeam
 
-    mls = Named @"mls-welcome-message" postMLSWelcome
+    mls = Named @"mls-welcome-message" sendWelcome
 
     features =
       Named @'("get", 'TeamFeatureSSO)

@@ -22,17 +22,13 @@ import Servant.API
 import Wire.API.Federation.Domain
 import Wire.API.Routes.Named
 
+type NamedFed name api = Named name (name :> OriginDomainHeader :> api)
+
 type FedEndpoint name input output =
-  Named
-    name
-    (name :> OriginDomainHeader :> ReqBody '[JSON] input :> Post '[JSON] output)
+  NamedFed name (ReqBody '[JSON] input :> Post '[JSON] output)
 
 type StreamingFedEndpoint name input output =
-  Named
-    name
-    ( name :> OriginDomainHeader :> ReqBody '[JSON] input
-        :> StreamPost NoFraming OctetStream output
-    )
+  NamedFed name (ReqBody '[JSON] input :> StreamPost NoFraming OctetStream output)
 
 type family MappendMaybe (x :: Maybe k) (y :: Maybe k) :: Maybe k where
   MappendMaybe 'Nothing y = y
