@@ -31,6 +31,7 @@ import Wire.API.Conversation
 import Wire.API.Conversation.Action
 import Wire.API.Conversation.Protocol
 import Wire.API.Conversation.Role (RoleName)
+import Wire.API.Error.Galley (GalleyError)
 import Wire.API.Federation.API.Common
 import Wire.API.Federation.Endpoint
 import Wire.API.Message
@@ -244,16 +245,11 @@ data ConversationUpdateRequest = ConversationUpdateRequest
   deriving (Arbitrary) via (GenericUniform ConversationUpdateRequest)
   deriving (FromJSON, ToJSON) via (CustomEncoded ConversationUpdateRequest)
 
-data ConversationUpdateError
-  = InsufficientPrivileges
-  | TODO
+data ConversationUpdateResponse
+  = ConversationUpdateResponseError GalleyError
+  | ConversationUpdateResponseUpdate ConversationUpdate
+  | ConversationUpdateResponseNoChanges
   deriving stock (Eq, Show, Generic)
-  deriving (ToJSON, FromJSON) via (CustomEncoded ConversationUpdateError)
-
-newtype ConversationUpdateResponse = ConversationUpdateResponse
-  { conversationUpdateResponse :: Either ConversationUpdateError ConversationUpdate
-  }
-  deriving stock (Eq, Show)
   deriving
     (ToJSON, FromJSON)
-    via (Either (CustomEncoded ConversationUpdateError) ConversationUpdate)
+    via (CustomEncoded ConversationUpdateResponse)

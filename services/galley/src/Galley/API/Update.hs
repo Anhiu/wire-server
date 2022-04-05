@@ -331,6 +331,10 @@ updateRemoteConversationReceiptMode ::
   Members
     '[ BrigAccess,
        Error FederationError,
+       ErrorS ('ActionDenied 'ModifyConversationReceiptMode),
+       ErrorS 'ConvAccessDenied,
+       ErrorS 'ConvNotFound,
+       ErrorS 'InvalidOperation,
        ExternalAccess,
        FederatorAccess,
        GundeckAccess,
@@ -344,38 +348,27 @@ updateRemoteConversationReceiptMode ::
   ConnId ->
   ConversationReceiptModeUpdate ->
   Sem r (UpdateResult Event)
-updateRemoteConversationReceiptMode rcnv lusr conn update = do
-  updateRemoteConversation rcnv lusr conn (SomeConversationAction (sing @'ConversationReceiptModeUpdateTag) update)
-
-updateRemoteConversation ::
-  Members
-    '[ BrigAccess,
-       Error FederationError,
-       ExternalAccess,
-       FederatorAccess,
-       GundeckAccess,
-       Input (Local ()),
-       MemberStore,
-       TinyLog
-     ]
-    r =>
-  Remote ConvId ->
-  Local UserId ->
-  ConnId ->
-  SomeConversationAction ->
-  Sem r (UpdateResult Event)
-updateRemoteConversation rcnv lusr conn action = do
+updateRemoteConversationReceiptMode rcnv lusr conn action = getUpdateResult $ do
   let updateRequest =
         ConversationUpdateRequest
           { curUser = tUnqualified lusr,
             curConvId = tUnqualified rcnv,
-            curAction = action
+            curAction = SomeConversationAction (sing @'ConversationReceiptModeUpdateTag) action
           }
   response <- E.runFederated rcnv (fedClient @'Galley @"update-conversation" updateRequest)
-  convUpdate <- ensureConversationUpdate response
+  convUpdate <- case response of
+    ConversationUpdateResponseNoChanges -> throw NoChanges
+    ConversationUpdateResponseError err ->
+      case err of
+        ActionDenied ModifyConversationReceiptMode -> throwS @('ActionDenied 'ModifyConversationReceiptMode)
+        ConvAccessDenied -> throwS @'ConvAccessDenied
+        ConvNotFound -> throwS @'ConvNotFound
+        InvalidOperation -> throwS @'InvalidOperation
+        err -> throw (FederationUnexpectedError (toWai err))
+    ConversationUpdateResponseUpdate convUpdate -> pure convUpdate
+
   onConversationUpdated (tDomain rcnv) convUpdate
-  event <- notifyRemoteConversationAction (qualifyAs rcnv convUpdate) conn
-  pure (Updated event)
+  notifyRemoteConversationAction (qualifyAs rcnv convUpdate) conn
 
 updateConversationReceiptModeUnqualified ::
   Members

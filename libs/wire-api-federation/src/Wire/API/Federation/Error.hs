@@ -140,6 +140,8 @@ data FederationError
     -- indicate a bug in either backend, or an incompatibility in the
     -- server-to-server API.
     FederationUnexpectedBody Text
+  | -- | Federator client got an unexpected error response from remote backend
+    FederationUnexpectedError Wai.Error
   deriving (Show, Typeable)
 
 instance Exception FederationError
@@ -152,6 +154,7 @@ federationErrorToWai FederationNotImplemented = federationNotImplemented
 federationErrorToWai FederationNotConfigured = federationNotConfigured
 federationErrorToWai (FederationCallFailure err) = federationClientErrorToWai err
 federationErrorToWai (FederationUnexpectedBody s) = federationUnexpectedBody s
+federationErrorToWai (FederationUnexpectedError wai) = federationUnexpectedError wai
 
 federationClientErrorToWai :: FederatorClientError -> Wai.Error
 federationClientErrorToWai (FederatorClientHTTP2Error e) =
@@ -275,6 +278,13 @@ federationUnexpectedBody msg =
     unexpectedFederationResponseStatus
     "federation-unexpected-body"
     ("Could parse body, but response was not expected: " <> LT.fromStrict msg)
+
+federationUnexpectedError :: Wai.Error -> Wai.Error
+federationUnexpectedError waiError =
+  Wai.mkError
+    unexpectedFederationResponseStatus
+    "federation-unexpected-wai-error"
+    ("Could parse body, but got an unexpected error response with label: " <> Wai.label waiError)
 
 federationNotConfigured :: Wai.Error
 federationNotConfigured =

@@ -14,6 +14,8 @@
 --
 -- You should have received a copy of the GNU Affero General Public License along
 -- with this program. If not, see <https://www.gnu.org/licenses/>.
+{-# LANGUAGE StandaloneKindSignatures #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 module Wire.API.Error.Galley
   ( GalleyError (..),
@@ -23,15 +25,20 @@ module Wire.API.Error.Galley
   )
 where
 
+import Data.Aeson (FromJSON (..), ToJSON (..))
+import Data.Singletons (SomeSing (SomeSing))
+import Data.Singletons.CustomStar (SingKind (toSing), genSingletons)
 import Data.Singletons.Prelude (Show_)
 import GHC.TypeLits
 import Imports
+import qualified Network.Wai.Utilities.Error as Wai
 import Polysemy
 import Polysemy.Error
 import Wire.API.Conversation.Role
 import Wire.API.Error
 import Wire.API.Routes.API
 import Wire.API.Team.Permission
+import Wire.API.Util.Aeson (CustomEncoded (..))
 
 data GalleyError
   = InvalidAction
@@ -68,6 +75,10 @@ data GalleyError
   | DeleteQueueFull
   | TeamSearchVisibilityNotEnabled
   | CannotEnableLegalHoldServiceLargeTeam
+  deriving (Show, Eq, Generic)
+  deriving (FromJSON, ToJSON) via (CustomEncoded GalleyError)
+
+$(genSingletons [''GalleyError])
 
 instance KnownError (MapError e) => IsSwaggerError (e :: GalleyError) where
   addToSwagger = addStaticErrorToSwagger @(MapError e)
@@ -147,6 +158,10 @@ type instance MapError 'CannotEnableLegalHoldServiceLargeTeam = 'StaticError 403
 type family MissingPermissionMessage (a :: Maybe Perm) :: Symbol where
   MissingPermissionMessage ('Just p) = "Insufficient permissions (missing " `AppendSymbol` Show_ p `AppendSymbol` ")"
   MissingPermissionMessage 'Nothing = "Insufficient permissions"
+
+instance APIError GalleyError where
+  toWai err = toWai $ case err of
+    InvalidAction -> dynError @(MapError 'InvalidAction)
 
 --------------------------------------------------------------------------------
 -- Authentication errors

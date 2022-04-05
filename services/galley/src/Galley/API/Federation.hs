@@ -453,39 +453,36 @@ updateConversation ::
   F.ConversationUpdateRequest ->
   Sem r ConversationUpdateResponse
 updateConversation origDomain updateRequest =
-  mapToRuntimeError @'NotATeamMember (InternalErrorWithDescription "TODO NotATeamMember")
-    . mapToRuntimeError @('ActionDenied 'AddConversationMember) (InternalErrorWithDescription "TODO ActionDenied AddConversationMember")
-    . mapToRuntimeError @('ActionDenied 'LeaveConversation) (InternalErrorWithDescription "TODO ActionDenied LeaveConversation")
-    . mapToRuntimeError @('ActionDenied 'DeleteConversation) (InternalErrorWithDescription "TODO ActionDenied DeleteConversation")
-    . mapToRuntimeError @('ActionDenied 'RemoveConversationMember) (InternalErrorWithDescription "TODO ActionDenied RemoveConversationMember")
-    . mapToRuntimeError @('ActionDenied 'ModifyOtherConversationMember) (InternalErrorWithDescription "TODO ActionDenied ModifyOtherConversationMember")
-    . mapToRuntimeError @('ActionDenied 'ModifyConversationName) (InternalErrorWithDescription "TODO ActionDenied ModifyConversationName")
-    . mapToRuntimeError @('ActionDenied 'ModifyConversationMessageTimer) (InternalErrorWithDescription "TODO ActionDenied ModifyConversationMessageTimer")
-    . mapToRuntimeError @('ActionDenied 'ModifyConversationReceiptMode) (InternalErrorWithDescription "TODO ActionDenied ModifyConversationReceiptMode")
-    . mapToRuntimeError @('ActionDenied 'ModifyConversationAccess) (InternalErrorWithDescription "TODO ActionDenied ModifyConversationAccess")
-    . mapToRuntimeError @'InvalidOperation (InternalErrorWithDescription "TODO InvalidOperation")
-    . mapToRuntimeError @'InvalidTargetAccess (InternalErrorWithDescription "TODO InvalidTargetAccess")
-    . mapToRuntimeError @'ConvNotFound (InternalErrorWithDescription "TODO ConvNotFound")
-    . mapToRuntimeError @'ConvMemberNotFound (InternalErrorWithDescription "TODO ConvMemberNotFound")
-    . mapToRuntimeError @'NotConnected (InternalErrorWithDescription "TODO NotConnected")
-    . mapToRuntimeError @'ConvAccessDenied (InternalErrorWithDescription "TODO ConvAccessDenied")
-    . mapToRuntimeError @'TooManyMembers (InternalErrorWithDescription "TODO TooManyMembers")
-    . mapError @NoChanges (const (InternalErrorWithDescription "TODO NoChanges"))
+  fmap mkResponse
+    . runError
+    . runError @NoChanges
+    . mapToRuntimeError @'NotATeamMember NotATeamMember
+    . mapToRuntimeError @('ActionDenied 'AddConversationMember) (ActionDenied AddConversationMember)
+    . mapToRuntimeError @('ActionDenied 'LeaveConversation) (ActionDenied LeaveConversation)
+    . mapToRuntimeError @('ActionDenied 'DeleteConversation) (ActionDenied DeleteConversation)
+    . mapToRuntimeError @('ActionDenied 'RemoveConversationMember) (ActionDenied RemoveConversationMember)
+    . mapToRuntimeError @('ActionDenied 'ModifyOtherConversationMember) (ActionDenied ModifyOtherConversationMember)
+    . mapToRuntimeError @('ActionDenied 'ModifyConversationName) (ActionDenied ModifyConversationName)
+    . mapToRuntimeError @('ActionDenied 'ModifyConversationMessageTimer) (ActionDenied ModifyConversationMessageTimer)
+    . mapToRuntimeError @('ActionDenied 'ModifyConversationReceiptMode) (ActionDenied ModifyConversationReceiptMode)
+    . mapToRuntimeError @('ActionDenied 'ModifyConversationAccess) (ActionDenied ModifyConversationAccess)
+    . mapToRuntimeError @'InvalidOperation InvalidOperation
+    . mapToRuntimeError @'InvalidTargetAccess InvalidTargetAccess
+    . mapToRuntimeError @'ConvNotFound ConvNotFound
+    . mapToRuntimeError @'ConvMemberNotFound ConvMemberNotFound
+    . mapToRuntimeError @'NotConnected NotConnected
+    . mapToRuntimeError @'ConvAccessDenied ConvAccessDenied
+    . mapToRuntimeError @'TooManyMembers TooManyMembers
     $ do
       loc <- qualifyLocal ()
       let rusr = toRemoteUnsafe origDomain (F.curUser updateRequest)
           lcnv = qualifyAs loc (F.curConvId updateRequest)
 
-      let runUpdate =
-            case F.curAction updateRequest of
-              SomeConversationAction tag action ->
-                $(sCases ''ConversationActionTag [|tag|] [|updateLocalConversationWithRemoteUser tag lcnv rusr action|])
-
-      F.ConversationUpdateResponse . Right <$> runUpdate
-
--- catchError :: Sem (Error e ': r) a -> (e -> Sem r a) -> Sem r a
--- catchError action handler = do
---   eith <- runError action
---   case eith of
---     Left err -> handler err
---     Right x -> pure x
+      case F.curAction updateRequest of
+        SomeConversationAction tag action ->
+          $(sCases ''ConversationActionTag [|tag|] [|updateLocalConversationWithRemoteUser tag lcnv rusr action|])
+  where
+    mkResponse :: Either GalleyError (Either NoChanges ConversationUpdate) -> ConversationUpdateResponse
+    mkResponse (Left err) = F.ConversationUpdateResponseError err
+    mkResponse (Right (Left NoChanges)) = F.ConversationUpdateResponseNoChanges
+    mkResponse (Right (Right convUpdate)) = F.ConversationUpdateResponseUpdate convUpdate
