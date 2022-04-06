@@ -26,12 +26,10 @@ module Wire.API.Error.Galley
 where
 
 import Data.Aeson (FromJSON (..), ToJSON (..))
-import Data.Singletons (SomeSing (SomeSing))
-import Data.Singletons.CustomStar (SingKind (toSing), genSingletons)
+import Data.Singletons.CustomStar (genSingletons)
 import Data.Singletons.Prelude (Show_)
 import GHC.TypeLits
 import Imports
-import qualified Network.Wai.Utilities.Error as Wai
 import Polysemy
 import Polysemy.Error
 import Wire.API.Conversation.Role
@@ -162,6 +160,59 @@ type family MissingPermissionMessage (a :: Maybe Perm) :: Symbol where
 instance APIError GalleyError where
   toWai err = toWai $ case err of
     InvalidAction -> dynError @(MapError 'InvalidAction)
+    InvalidTargetAccess -> dynError @(MapError 'InvalidTargetAccess)
+    TeamNotFound -> dynError @(MapError 'TeamNotFound)
+    TeamMemberNotFound -> dynError @(MapError 'TeamMemberNotFound)
+    NotATeamMember -> dynError @(MapError 'NotATeamMember)
+    NonBindingTeam -> dynError @(MapError 'NonBindingTeam)
+    BroadcastLimitExceeded -> dynError @(MapError 'BroadcastLimitExceeded)
+    UserBindingExists -> dynError @(MapError 'UserBindingExists)
+    NoAddToBinding -> dynError @(MapError 'NoAddToBinding)
+    TooManyTeamMembers -> dynError @(MapError 'TooManyTeamMembers)
+    MissingPermission Nothing -> dynError @(MapError ('MissingPermission 'Nothing))
+    MissingPermission (Just CreateConversation) -> dynError @(MapError ('MissingPermission ('Just 'CreateConversation)))
+    MissingPermission (Just DoNotUseDeprecatedDeleteConversation) -> dynError @(MapError ('MissingPermission ('Just 'DoNotUseDeprecatedDeleteConversation)))
+    MissingPermission (Just AddTeamMember) -> dynError @(MapError ('MissingPermission ('Just 'AddTeamMember)))
+    MissingPermission (Just RemoveTeamMember) -> dynError @(MapError ('MissingPermission ('Just 'RemoveTeamMember)))
+    MissingPermission (Just DoNotUseDeprecatedAddRemoveConvMember) -> dynError @(MapError ('MissingPermission ('Just 'DoNotUseDeprecatedAddRemoveConvMember)))
+    MissingPermission (Just DoNotUseDeprecatedModifyConvName) -> dynError @(MapError ('MissingPermission ('Just 'DoNotUseDeprecatedModifyConvName)))
+    MissingPermission (Just GetBilling) -> dynError @(MapError ('MissingPermission ('Just 'GetBilling)))
+    MissingPermission (Just SetBilling) -> dynError @(MapError ('MissingPermission ('Just 'SetBilling)))
+    MissingPermission (Just SetTeamData) -> dynError @(MapError ('MissingPermission ('Just 'SetTeamData)))
+    MissingPermission (Just GetMemberPermissions) -> dynError @(MapError ('MissingPermission ('Just 'GetMemberPermissions)))
+    MissingPermission (Just SetMemberPermissions) -> dynError @(MapError ('MissingPermission ('Just 'SetMemberPermissions)))
+    MissingPermission (Just GetTeamConversations) -> dynError @(MapError ('MissingPermission ('Just 'GetTeamConversations)))
+    MissingPermission (Just DeleteTeam) -> dynError @(MapError ('MissingPermission ('Just 'DeleteTeam)))
+    ActionDenied AddConversationMember -> dynError @(MapError ('ActionDenied 'AddConversationMember))
+    ActionDenied RemoveConversationMember -> dynError @(MapError ('ActionDenied 'RemoveConversationMember))
+    ActionDenied ModifyConversationName -> dynError @(MapError ('ActionDenied 'ModifyConversationName))
+    ActionDenied ModifyConversationMessageTimer -> dynError @(MapError ('ActionDenied 'ModifyConversationMessageTimer))
+    ActionDenied ModifyConversationReceiptMode -> dynError @(MapError ('ActionDenied 'ModifyConversationReceiptMode))
+    ActionDenied ModifyConversationAccess -> dynError @(MapError ('ActionDenied 'ModifyConversationAccess))
+    ActionDenied ModifyOtherConversationMember -> dynError @(MapError ('ActionDenied 'ModifyOtherConversationMember))
+    ActionDenied LeaveConversation -> dynError @(MapError ('ActionDenied 'LeaveConversation))
+    ActionDenied DeleteConversation -> dynError @(MapError ('ActionDenied 'DeleteConversation))
+    NotConnected -> dynError @(MapError 'NotConnected)
+    InvalidOperation -> dynError @(MapError 'InvalidOperation)
+    InvalidTarget -> dynError @(MapError 'InvalidTarget)
+    ConvNotFound -> dynError @(MapError 'ConvNotFound)
+    ConvAccessDenied -> dynError @(MapError 'ConvAccessDenied)
+    MLSNonEmptyMemberList -> dynError @(MapError 'MLSNonEmptyMemberList)
+    NoBindingTeamMembers -> dynError @(MapError 'NoBindingTeamMembers)
+    NoBindingTeam -> dynError @(MapError 'NoBindingTeam)
+    NotAOneMemberTeam -> dynError @(MapError 'NotAOneMemberTeam)
+    TooManyMembers -> dynError @(MapError 'TooManyMembers)
+    ConvMemberNotFound -> dynError @(MapError 'ConvMemberNotFound)
+    GuestLinksDisabled -> dynError @(MapError 'GuestLinksDisabled)
+    CodeNotFound -> dynError @(MapError 'CodeNotFound)
+    InvalidPermissions -> dynError @(MapError 'InvalidPermissions)
+    InvalidTeamStatusUpdate -> dynError @(MapError 'InvalidTeamStatusUpdate)
+    AccessDenied -> dynError @(MapError 'AccessDenied)
+    UnknownWelcomeRecipient -> dynError @(MapError 'UnknownWelcomeRecipient)
+    CustomBackendNotFound -> dynError @(MapError 'CustomBackendNotFound)
+    DeleteQueueFull -> dynError @(MapError 'DeleteQueueFull)
+    TeamSearchVisibilityNotEnabled -> dynError @(MapError 'TeamSearchVisibilityNotEnabled)
+    CannotEnableLegalHoldServiceLargeTeam -> dynError @(MapError 'CannotEnableLegalHoldServiceLargeTeam)
 
 --------------------------------------------------------------------------------
 -- Authentication errors
