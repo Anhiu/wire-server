@@ -358,13 +358,13 @@ updateRemoteConversationReceiptMode rcnv lusr conn action = getUpdateResult $ do
   response <- E.runFederated rcnv (fedClient @'Galley @"update-conversation" updateRequest)
   convUpdate <- case response of
     ConversationUpdateResponseNoChanges -> throw NoChanges
-    ConversationUpdateResponseError err ->
-      case err of
+    ConversationUpdateResponseError err' ->
+      case err' of
         ActionDenied ModifyConversationReceiptMode -> throwS @('ActionDenied 'ModifyConversationReceiptMode)
         ConvAccessDenied -> throwS @'ConvAccessDenied
         ConvNotFound -> throwS @'ConvNotFound
         InvalidOperation -> throwS @'InvalidOperation
-        err -> throw (FederationUnexpectedError (toWai err))
+        _ -> throw (FederationUnexpectedError (toWai err'))
     ConversationUpdateResponseUpdate convUpdate -> pure convUpdate
 
   onConversationUpdated (tDomain rcnv) convUpdate
