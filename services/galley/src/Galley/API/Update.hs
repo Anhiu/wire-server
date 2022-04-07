@@ -358,17 +358,33 @@ updateRemoteConversationReceiptMode rcnv lusr conn action = getUpdateResult $ do
   response <- E.runFederated rcnv (fedClient @'Galley @"update-conversation" updateRequest)
   convUpdate <- case response of
     ConversationUpdateResponseNoChanges -> throw NoChanges
-    ConversationUpdateResponseError err' ->
-      case err' of
-        ActionDenied ModifyConversationReceiptMode -> throwS @('ActionDenied 'ModifyConversationReceiptMode)
-        ConvAccessDenied -> throwS @'ConvAccessDenied
-        ConvNotFound -> throwS @'ConvNotFound
-        InvalidOperation -> throwS @'InvalidOperation
-        _ -> throw (FederationUnexpectedError (toWai err'))
+    ConversationUpdateResponseError err' -> rethrowErrors @'[ErrorS 'ConvAccessDenied] err'
     ConversationUpdateResponseUpdate convUpdate -> pure convUpdate
 
   onConversationUpdated (tDomain rcnv) convUpdate
   notifyRemoteConversationAction (qualifyAs rcnv convUpdate) conn
+
+class RethrowErrors (effs :: EffectRow) r where
+  rethrowErrors :: GalleyError -> Sem r a
+
+instance (Member (Error FederationError) r) => RethrowErrors '[] r where
+  rethrowErrors :: GalleyError -> Sem r a
+  rethrowErrors err' = throw (FederationUnexpectedError (toWai err'))
+
+instance
+  ( SingI (e :: GalleyError),
+    Member (ErrorS e) r,
+    RethrowErrors effs r
+  ) =>
+  RethrowErrors ((ErrorS e) ': effs) r
+  where
+  rethrowErrors :: GalleyError -> Sem r a
+  rethrowErrors err' =
+    if err' == demote @e
+      then throwS @e
+      else rethrowErrors @effs @r err'
+
+-- rethrowErrors :: DeclaredErrorEffects api
 
 updateConversationReceiptModeUnqualified ::
   Members

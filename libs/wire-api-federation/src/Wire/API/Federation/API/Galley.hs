@@ -30,8 +30,8 @@ import Wire.API.Arbitrary (Arbitrary, GenericUniform (..))
 import Wire.API.Conversation
 import Wire.API.Conversation.Action
 import Wire.API.Conversation.Protocol
-import Wire.API.Conversation.Role (RoleName)
-import Wire.API.Error.Galley (GalleyError)
+import Wire.API.Conversation.Role (Action (ModifyConversationReceiptMode), RoleName)
+import Wire.API.Error.Galley
 import Wire.API.Federation.API.Common
 import Wire.API.Federation.Endpoint
 import Wire.API.Message
@@ -59,6 +59,15 @@ type GalleyApi =
     :<|> FedEndpoint "send-message" MessageSendRequest MessageSendResponse
     :<|> FedEndpoint "on-user-deleted-conversations" UserDeletedConversationsNotification EmptyResponse
     :<|> FedEndpoint "update-conversation" ConversationUpdateRequest ConversationUpdateResponse
+    :<|> FedEndpointWithErrors
+           "update-conversation-receipt-mode"
+           '[ 'ActionDenied 'ModifyConversationReceiptMode,
+              'ConvAccessDenied,
+              'ConvNotFound,
+              'InvalidOperation
+            ]
+           ConversationUpdateRequest
+           ConversationUpdateResponse
 
 data GetConversationsRequest = GetConversationsRequest
   { gcrUserId :: UserId,

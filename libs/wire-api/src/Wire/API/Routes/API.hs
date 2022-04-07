@@ -44,15 +44,15 @@ newtype API api r = API {unAPI :: ServerT api (Sem r)}
 -- | Convert a polysemy handler to an 'API' value.
 mkAPI ::
   forall r0 api.
-  (HasServer api '[Domain], ServerEffects (DeclaredErrorEffects api) r0) =>
+  (HasServer api '[Domain], ServerEffects DynError (DeclaredErrorEffects api) r0) =>
   ServerT api (Sem (Append (DeclaredErrorEffects api) r0)) ->
   API api r0
-mkAPI h = API $ hoistServerWithDomain @api (interpretServerEffects @(DeclaredErrorEffects api) @r0) h
+mkAPI h = API $ hoistServerWithDomain @api (interpretServerEffects @DynError @(DeclaredErrorEffects api) @r0) h
 
 -- | Convert a polysemy handler to a named 'API' value.
 mkNamedAPI ::
   forall name r0 api.
-  (HasServer api '[Domain], ServerEffects (DeclaredErrorEffects api) r0) =>
+  (HasServer api '[Domain], ServerEffects DynError (DeclaredErrorEffects api) r0) =>
   ServerT api (Sem (Append (DeclaredErrorEffects api) r0)) ->
   API (Named name api) r0
 mkNamedAPI = API . Named . unAPI . mkAPI @r0 @api
@@ -92,17 +92,17 @@ hoistAPI ::
   API api2 r2
 hoistAPI f = API . f . unAPI
 
-class ServerEffect eff r where
+class ServerEffect targetError eff r where
   interpretServerEffect :: Sem (eff ': r) a -> Sem r a
 
-class ServerEffects r r1 where
+class ServerEffects targetError r r1 where
   interpretServerEffects :: Sem (Append r r1) a -> Sem r1 a
 
-instance ServerEffects '[] r where
+instance ServerEffects targetError '[] r where
   interpretServerEffects = id
 
-instance (ServerEffects r r1, ServerEffect eff (Append r r1)) => ServerEffects (eff ': r) r1 where
-  interpretServerEffects = interpretServerEffects @r @r1 . interpretServerEffect @eff @(Append r r1)
+instance (ServerEffects targetError r r1, ServerEffect targetError eff (Append r r1)) => ServerEffects targetError (eff ': r) r1 where
+  interpretServerEffects = interpretServerEffects @targetError @r @r1 . interpretServerEffect @targetError @eff @(Append r r1)
 
-instance (KnownError (MapError e), Member (Error DynError) r) => ServerEffect (ErrorS e) r where
+instance (KnownError (MapError e), Member (Error DynError) r) => ServerEffect DynError (ErrorS e) r where
   interpretServerEffect = mapToDynamicError

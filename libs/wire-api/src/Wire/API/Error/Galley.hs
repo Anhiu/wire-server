@@ -26,6 +26,7 @@ module Wire.API.Error.Galley
 where
 
 import Data.Aeson (FromJSON (..), ToJSON (..))
+import Data.Singletons
 import Data.Singletons.CustomStar (genSingletons)
 import Data.Singletons.Prelude (Show_)
 import GHC.TypeLits
@@ -214,6 +215,9 @@ instance APIError GalleyError where
     TeamSearchVisibilityNotEnabled -> dynError @(MapError 'TeamSearchVisibilityNotEnabled)
     CannotEnableLegalHoldServiceLargeTeam -> dynError @(MapError 'CannotEnableLegalHoldServiceLargeTeam)
 
+instance (SingI e, Member (Error GalleyError) r) => ServerEffect GalleyError (ErrorS (e :: GalleyError)) r where
+  interpretServerEffect = mapToRuntimeError (demote @e)
+
 --------------------------------------------------------------------------------
 -- Authentication errors
 
@@ -241,7 +245,7 @@ authenticationErrorToDyn ReAuthFailed = dynError @(MapError 'ReAuthFailed)
 authenticationErrorToDyn VerificationCodeAuthFailed = dynError @(MapError 'VerificationCodeAuthFailed)
 authenticationErrorToDyn VerificationCodeRequired = dynError @(MapError 'VerificationCodeRequired)
 
-instance Member (Error DynError) r => ServerEffect (Error AuthenticationError) r where
+instance Member (Error DynError) r => ServerEffect DynError (Error AuthenticationError) r where
   interpretServerEffect = mapError authenticationErrorToDyn
 
 --------------------------------------------------------------------------------
@@ -284,7 +288,7 @@ type instance MapError 'FeatureLocked = 'StaticError 409 "feature-locked" "Featu
 
 type instance ErrorEffect TeamFeatureError = Error TeamFeatureError
 
-instance Member (Error DynError) r => ServerEffect (Error TeamFeatureError) r where
+instance Member (Error DynError) r => ServerEffect DynError (Error TeamFeatureError) r where
   interpretServerEffect = mapError $ \case
     AppLockInactivityTimeoutTooLow -> dynError @(MapError 'AppLockInactivityTimeoutTooLow)
     LegalHoldFeatureFlagNotEnabled -> dynError @(MapError 'LegalHoldFeatureFlagNotEnabled)

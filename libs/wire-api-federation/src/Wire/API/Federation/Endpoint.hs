@@ -18,6 +18,7 @@
 module Wire.API.Federation.Endpoint where
 
 import Servant.API
+import Wire.API.Error (CanThrowMany)
 import Wire.API.Federation.Domain
 import Wire.API.Routes.Named
 
@@ -25,6 +26,11 @@ type FedEndpoint name input output =
   Named
     name
     (name :> OriginDomainHeader :> ReqBody '[JSON] input :> Post '[JSON] output)
+
+type FedEndpointWithErrors name errors input output =
+  Named
+    name
+    (name :> OriginDomainHeader :> CanThrowMany errors :> ReqBody '[JSON] input :> Post '[JSON] output)
 
 type StreamingFedEndpoint name input output =
   Named

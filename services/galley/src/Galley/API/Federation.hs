@@ -69,7 +69,9 @@ import Wire.API.Federation.API
 import Wire.API.Federation.API.Common (EmptyResponse (..))
 import Wire.API.Federation.API.Galley (ConversationUpdateResponse)
 import qualified Wire.API.Federation.API.Galley as F
+import Wire.API.Federation.Endpoint
 import Wire.API.Federation.Error
+import Wire.API.Routes.API
 import Wire.API.Routes.Internal.Brig.Connection
 import Wire.API.Routes.Named
 import Wire.API.ServantProto
@@ -77,6 +79,25 @@ import Wire.API.User.Client (userClientMap)
 
 type FederationAPI = "federation" :> FedApi 'Galley
 
+type ReceiptModeAPIWithoutErrors =
+  FedEndpointWithErrors
+    "update-conversation-receipt-mode"
+    '[]
+    F.ConversationUpdateRequest
+    F.ConversationUpdateResponse
+
+type ReceiptModeAPI =
+  FedEndpointWithErrors
+    "update-conversation-receipt-mode"
+    '[ 'ActionDenied 'ModifyConversationReceiptMode,
+       'ConvAccessDenied,
+       'ConvNotFound,
+       'InvalidOperation
+     ]
+    F.ConversationUpdateRequest
+    F.ConversationUpdateResponse
+
+-- | Convert a polysemy handler to an 'API' value.
 federationSitemap :: ServerT FederationAPI (Sem GalleyEffects)
 federationSitemap =
   Named @"on-conversation-created" onConversationCreated
@@ -87,6 +108,10 @@ federationSitemap =
     :<|> Named @"send-message" sendMessage
     :<|> Named @"on-user-deleted-conversations" onUserDeleted
     :<|> Named @"update-conversation" updateConversation
+    :<|> hoistServerWithDomain
+      @ReceiptModeAPIWithoutErrors
+      (interpretServerEffects @GalleyError @(DeclaredErrorEffects ReceiptModeAPI))
+      (Named @"update-conversation-receipt-mode" updateConversationReceiptMode)
 
 onConversationCreated ::
   Members
@@ -481,6 +506,56 @@ updateConversation origDomain updateRequest =
       case F.curAction updateRequest of
         SomeConversationAction tag action ->
           $(sCases ''ConversationActionTag [|tag|] [|updateLocalConversationWithRemoteUser tag lcnv rusr action|])
+  where
+    mkResponse :: Either GalleyError (Either NoChanges ConversationUpdate) -> ConversationUpdateResponse
+    mkResponse (Left err) = F.ConversationUpdateResponseError err
+    mkResponse (Right (Left NoChanges)) = F.ConversationUpdateResponseNoChanges
+    mkResponse (Right (Right convUpdate)) = F.ConversationUpdateResponseUpdate convUpdate
+
+updateConversationReceiptMode ::
+  forall r.
+  ( Members
+      '[ BrigAccess,
+         CodeStore,
+         BotAccess,
+         FireAndForget,
+         Error FederationError,
+         Error InvalidInput,
+         Error LegalHoldError,
+         ErrorS ('ActionDenied 'ModifyConversationReceiptMode),
+         ErrorS 'ConvAccessDenied,
+         ErrorS 'ConvNotFound,
+         ErrorS 'InvalidOperation,
+         ExternalAccess,
+         FederatorAccess,
+         Error InternalError,
+         GundeckAccess,
+         Input Opts,
+         Input UTCTime,
+         LegalHoldStore,
+         MemberStore,
+         TeamStore,
+         ConversationStore,
+         Input (Local ())
+       ]
+      r
+  ) =>
+  -- |
+  Domain ->
+  -- |
+  F.ConversationUpdateRequest ->
+  Sem r ConversationUpdateResponse
+updateConversationReceiptMode origDomain updateRequest =
+  fmap mkResponse . runError . runError @NoChanges $
+    do
+      loc <- qualifyLocal ()
+      let rusr = toRemoteUnsafe origDomain (F.curUser updateRequest)
+          lcnv = qualifyAs loc (F.curConvId updateRequest)
+
+      -- case F.curAction updateRequest of
+      --   SomeConversationAction tag action ->
+      --     $(sCases ''ConversationActionTag [|tag|] [|updateLocalConversationWithRemoteUser tag lcnv rusr action|])
+      pure (error "TODO")
   where
     mkResponse :: Either GalleyError (Either NoChanges ConversationUpdate) -> ConversationUpdateResponse
     mkResponse (Left err) = F.ConversationUpdateResponseError err
