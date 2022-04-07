@@ -188,7 +188,8 @@ instance
 
 type family DeclaredErrorEffects api :: EffectRow where
   DeclaredErrorEffects (CanThrow e :> api) = (ErrorEffect e ': DeclaredErrorEffects api)
-  DeclaredErrorEffects (CanThrowMany '(e, es) :> api) =
+-- TODO: is this correct?
+  DeclaredErrorEffects (CanThrowMany (e ': es) :> api) =
     DeclaredErrorEffects (CanThrow e :> CanThrowMany es :> api)
   DeclaredErrorEffects (x :> api) = DeclaredErrorEffects api
   DeclaredErrorEffects (Named n api) = DeclaredErrorEffects api
