@@ -79,13 +79,6 @@ import Wire.API.User.Client (userClientMap)
 
 type FederationAPI = "federation" :> FedApi 'Galley
 
-type ReceiptModeAPIWithoutErrors =
-  FedEndpointWithErrors
-    "update-conversation-receipt-mode"
-    '[]
-    F.ConversationUpdateRequest
-    F.ConversationUpdateResponse
-
 type ReceiptModeAPI =
   FedEndpointWithErrors
     "update-conversation-receipt-mode"
@@ -109,7 +102,7 @@ federationSitemap =
     :<|> Named @"on-user-deleted-conversations" onUserDeleted
     :<|> Named @"update-conversation" updateConversation
     :<|> hoistServerWithDomain
-      @ReceiptModeAPIWithoutErrors
+      @ReceiptModeAPI
       (interpretServerEffects @GalleyError @(DeclaredErrorEffects ReceiptModeAPI))
       (Named @"update-conversation-receipt-mode" updateConversationReceiptMode)
 
