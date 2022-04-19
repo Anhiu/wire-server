@@ -72,7 +72,7 @@ data FederatorClientEnv = FederatorClientEnv
 
 data FederatorClientVersionedEnv = FederatorClientVersionedEnv
   { cveEnv :: FederatorClientEnv,
-    cveVersion :: Maybe Version
+    _cveVersion :: Maybe Version
   }
 
 newtype FederatorClient (c :: Component) a = FederatorClient
@@ -189,28 +189,41 @@ streamingResponseStrictBody resp =
     . responseBody
     $ resp
 
-withHTTP2StreamingRequest ::
+data FederatorRequest = RPC Request | FetchVersions
+
+withHTTP2FederatorRequest ::
   forall c a.
   KnownComponent c =>
   (HTTP.Status -> Bool) ->
-  Request ->
+  FederatorRequest ->
   (StreamingResponse -> IO a) ->
   FederatorClient c a
-withHTTP2StreamingRequest successfulStatus req handleResponse = do
+withHTTP2FederatorRequest successfulStatus fedReq handleResponse = do
   env <- asks cveEnv
-  let baseUrlPath =
-        HTTP.encodePathSegments
-          [ "rpc",
-            domainText (ceTargetDomain env),
-            componentName (componentVal @c)
-          ]
-  let path = baseUrlPath <> requestPath req
-  body <- case requestBody req of
-    Just (RequestBodyLBS lbs, _) -> pure lbs
-    Just (RequestBodyBS bs, _) -> pure (LBS.fromStrict bs)
-    Just (RequestBodySource _, _) ->
-      throwError FederatorClientStreamingNotSupported
-    Nothing -> pure mempty
+  let path = case fedReq of
+        RPC req ->
+          let baseUrlPath =
+                HTTP.encodePathSegments
+                  [ "rpc",
+                    domainText (ceTargetDomain env),
+                    componentName (componentVal @c)
+                  ]
+           in baseUrlPath <> requestPath req
+        FetchVersions ->
+          HTTP.encodePathSegments
+            ["api-version", domainText (ceTargetDomain env)]
+
+  (req, body) <- case fedReq of
+    RPC req -> do
+      body <- case requestBody req of
+        Just (RequestBodyLBS lbs, _) -> pure lbs
+        Just (RequestBodyBS bs, _) -> pure (LBS.fromStrict bs)
+        Just (RequestBodySource _, _) ->
+          throwError FederatorClientStreamingNotSupported
+        Nothing -> pure mempty
+      pure (req {requestBody = Nothing}, body)
+    FetchVersions ->
+      pure (defaultRequest {requestPath = "/api-version"}, mempty)
   let req' =
         HTTP2.requestBuilder
           (requestMethod req)
@@ -238,6 +251,16 @@ withHTTP2StreamingRequest successfulStatus req handleResponse = do
               (toLazyByteString (requestPath req))
               (toLazyByteString bdy)
           )
+
+withHTTP2StreamingRequest ::
+  forall c a.
+  KnownComponent c =>
+  (HTTP.Status -> Bool) ->
+  Request ->
+  (StreamingResponse -> IO a) ->
+  FederatorClient c a
+withHTTP2StreamingRequest successfulStatus req =
+  withHTTP2FederatorRequest successfulStatus (RPC req)
 
 mkFailureResponse :: HTTP.Status -> Domain -> LByteString -> LByteString -> Wai.Error
 mkFailureResponse status domain path body
@@ -307,8 +330,8 @@ runVersionedFederatorClientToCodensity env =
   flip runReaderT env
     . unFederatorClient
 
-versionNegotiation :: FederatorClient c Version
-versionNegotiation = undefined
+versionNegotiation :: forall c. KnownComponent c => FederatorClient c Version
+versionNegotiation = withHTTP2FederatorRequest @c HTTP.statusIsSuccessful FetchVersions _
 
 freeTLSConfig :: HTTP2.Config -> IO ()
 freeTLSConfig cfg = free (HTTP2.confWriteBuffer cfg)

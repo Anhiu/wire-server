@@ -17,9 +17,12 @@
 
 module Wire.API.Federation.Version where
 
+import Control.Lens ((?~))
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import Data.Schema
+import qualified Data.Swagger as S
 import Imports
+import Wire.API.VersionInfo
 
 data Version = V0 | V1
   deriving stock (Eq, Ord, Bounded, Enum, Show)
@@ -31,3 +34,23 @@ instance ToSchema Version where
       [ element 0 V0,
         element 1 V1
       ]
+
+supportedVersions :: [Version]
+supportedVersions = [minBound .. maxBound]
+
+data VersionInfo = VersionInfo
+  { vinfoSupported :: [Version]
+  }
+  deriving (FromJSON, ToJSON, S.ToSchema) via (Schema VersionInfo)
+
+instance ToSchema VersionInfo where
+  schema =
+    objectWithDocModifier "VersionInfo" (S.schema . S.example ?~ toJSON example) $
+      VersionInfo
+        <$> vinfoSupported .= vinfoObjectSchema schema
+    where
+      example :: VersionInfo
+      example =
+        VersionInfo
+          { vinfoSupported = supportedVersions
+          }

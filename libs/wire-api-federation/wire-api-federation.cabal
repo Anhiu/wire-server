@@ -90,6 +90,7 @@ library
     , http2
     , imports
     , kan-extensions
+    , lens
     , lifted-base
     , metrics-wai
     , mtl
@@ -102,6 +103,7 @@ library
     , singletons
     , sop-core
     , streaming-commons
+    , swagger2
     , template-haskell
     , text >=0.11
     , time >=1.8
@@ -191,6 +193,7 @@ test-suite spec
     , http2
     , imports
     , kan-extensions
+    , lens
     , lifted-base
     , metrics-wai
     , mtl
@@ -204,6 +207,7 @@ test-suite spec
     , singletons
     , sop-core
     , streaming-commons
+    , swagger2
     , template-haskell
     , text >=0.11
     , time >=1.8

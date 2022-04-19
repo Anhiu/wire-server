@@ -114,6 +114,9 @@ data FederatorClientError
     FederatorClientServantError ClientError
   | -- | This error will be thrown when federator returns an error response.
     FederatorClientError Wai.Error
+  | -- | This happens when an invalid version information response is returned
+    -- by federator.
+    FederatorClientVersionNegotiationError
   deriving (Show, Typeable)
 
 instance Exception FederatorClientError
@@ -161,6 +164,8 @@ federationClientErrorToWai FederatorClientStreamingNotSupported =
 federationClientErrorToWai (FederatorClientServantError err) =
   federationServantErrorToWai err
 federationClientErrorToWai (FederatorClientError err) = err
+federationClientErrorToWai FederatorClientVersionNegotiationError =
+  Wai.mkError HTTP.status500 "federation-invalid-versions" "Remote federator returned invalid version information"
 
 federationRemoteHTTP2Error :: FederatorClientHTTP2Error -> Wai.Error
 federationRemoteHTTP2Error FederatorClientNoStatusCode =
