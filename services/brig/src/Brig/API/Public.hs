@@ -202,6 +202,7 @@ servantSitemap = userAPI :<|> selfAPI :<|> accountAPI :<|> clientAPI :<|> prekey
         :<|> Named @"get-user-client-qualified" getUserClientQualified
         :<|> Named @"list-clients-bulk" listClientsBulk
         :<|> Named @"list-clients-bulk-v2" listClientsBulkV2
+        :<|> Named @"list-clients-bulk@v2" listClientsBulkV2
 
     prekeyAPI :: ServerT PrekeyAPI (Handler r)
     prekeyAPI =
